@@ -9,7 +9,6 @@
     "dev": "node --watch --env-file=.env src/server.js",
     "start": "node src/server.js",
     "migrate": "node --env-file=.env src/migrate.js",
-    "vercel-build": "npm --prefix web ci && npm --prefix web run build",
     "test": "node --test test/*.test.js test/integration/*.test.js"
   },
   "dependencies": {

@@ -1,18 +1,42 @@
 {
-  "buildCommand": "npm run vercel-build",
-  "outputDirectory": "web/dist",
-  "functions": {
-    "api/index.js": {
-      "maxDuration": 30
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "stockflow": {
+      "root": ".",
+      "framework": "fastify",
+      "entrypoint": "api/index.js",
+      "buildCommand": "npm ci"
+    },
+    "web": {
+      "root": "web",
+      "framework": "vite",
+      "buildCommand": "npm run build"
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index" },
-    { "source": "/auth/(.*)", "destination": "/api/index" },
-    { "source": "/webhooks/(.*)", "destination": "/api/index" },
-    { "source": "/billing/done", "destination": "/index.html" },
-    { "source": "/health", "destination": "/api/index" },
-    { "source": "/internal/(.*)", "destination": "/api/index" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/(.*)",
+      "destination": { "service": "stockflow" }
+    },
+    {
+      "source": "/auth/(.*)",
+      "destination": { "service": "stockflow" }
+    },
+    {
+      "source": "/webhooks/(.*)",
+      "destination": { "service": "stockflow" }
+    },
+    {
+      "source": "/health",
+      "destination": { "service": "stockflow" }
+    },
+    {
+      "source": "/internal/(.*)",
+      "destination": { "service": "stockflow" }
+    },
+    {
+      "source": "/(.*)",
+      "destination": { "service": "web" }
+    }
   ]
 }

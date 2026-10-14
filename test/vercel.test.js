@@ -1,5 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+test('Vercel routes browser API calls to Fastify and other paths to the frontend', () => {
+  const config = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
+  assert.deepEqual(Object.keys(config.services).sort(), ['stockflow', 'web']);
+  assert.equal(config.services.stockflow.entrypoint, 'api/index.js');
+  assert.equal(config.services.stockflow.framework, 'fastify');
+  assert.equal(config.services.web.root, 'web');
+  assert.deepEqual(
+    config.rewrites.map(({ source, destination }) => [source, destination.service]),
+    [
+      ['/api/(.*)', 'stockflow'],
+      ['/auth/(.*)', 'stockflow'],
+      ['/webhooks/(.*)', 'stockflow'],
+      ['/health', 'stockflow'],
+      ['/internal/(.*)', 'stockflow'],
+      ['/(.*)', 'web'],
+    ],
+  );
+  assert.equal(config.services.stockflow.bindings, undefined);
+  assert.equal(config.services.web.bindings, undefined);
+});
 
 test('Vercel reminder cron requires authorization and enabled reminders', async (t) => {
   const previous = {
