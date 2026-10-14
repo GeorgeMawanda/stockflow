@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: stockflow
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: npm ci && npm --prefix web ci && npm --prefix web run build
+    preDeployCommand: node src/migrate.js
+    startCommand: npm start
+    healthCheckPath: /health
+    maxShutdownDelaySeconds: 60
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: stockflow-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: REMINDERS_ENABLED
+        value: "false"
+      - key: AI_BASE_URL
+        value: https://api.openai.com/v1
+
+databases:
+  - name: stockflow-db
+    databaseName: stockflow
+    user: stockflow
+    plan: basic-256mb
+    region: frankfurt
+    postgresMajorVersion: "16"
