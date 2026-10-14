@@ -12,13 +12,13 @@ import { hashPassword, verifyPassword } from './auth.js';
 import { parseMomoSms, normalizePhone } from './momo.js';
 import { applyToCustomer } from './payments.js';
 import { sendSms } from './sms.js';
-import { reminderText, toIntl } from './reminders.js';
+import { reminderText, toIntl, runRemindersLocked } from './reminders.js';
 import { PLANS, isActive, createCheckout, handleChargeCompleted, safeEqual } from './billing.js';
 import { IMAGE_TYPES, MAX_IMAGE_BASE64, parseImage } from './images.js';
 import { buildBusinessReport, validateReportRange } from './reports.js';
 import { getAiConfig, getAiSuggestion, localSuggestions } from './assistant.js';
 
-export async function buildApp() {
+export async function buildApp({ serveFrontend = true } = {}) {
 if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET is required');
 const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 0);
 if (!Number.isSafeInteger(trustProxyHops) || trustProxyHops < 0 || trustProxyHops > 3) {
@@ -29,11 +29,11 @@ await app.register(helmet);
 await app.register(rateLimit, { max: 100, timeWindow: '1 minute' });
 await app.register(jwt, { secret: process.env.JWT_SECRET });
 const webDist = resolve(fileURLToPath(new URL('../web/dist/', import.meta.url)));
-if (existsSync(webDist)) {
+if (serveFrontend && existsSync(webDist)) {
   await app.register(fastifyStatic, { root: webDist, prefix: '/' });
   app.get('/billing/done', async (_req, reply) => reply.sendFile('index.html'));
 }
-else if (process.env.NODE_ENV === 'production') throw new Error('Frontend build missing; run npm --prefix web run build');
+else if (serveFrontend && process.env.NODE_ENV === 'production') throw new Error('Frontend build missing; run npm --prefix web run build');
 
 app.setErrorHandler((err, req, reply) => {
   if (err instanceof z.ZodError) return reply.code(400).send({ error: 'validation', issues: err.issues });
@@ -288,6 +288,17 @@ app.post('/webhooks/flutterwave', { config: { rateLimit: { max: 300, timeWindow:
   if (!process.env.FLW_WEBHOOK_HASH || !safeEqual(req.headers['verif-hash'], process.env.FLW_WEBHOOK_HASH)) return reply.code(401).send();
   const result = await handleChargeCompleted(req.body, req.log); // throws on network error so Flutterwave retries
   return { result };
+});
+
+app.get('/internal/cron/reminders', async (req, reply) => {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || !safeEqual(req.headers.authorization, `Bearer ${secret}`)) {
+    return reply.code(401).send({ error: 'Unauthorized' });
+  }
+  if (process.env.REMINDERS_ENABLED !== 'true') {
+    return reply.code(503).send({ error: 'Reminders are disabled' });
+  }
+  return runRemindersLocked(pool, { send: sendSms, log: app.log });
 });
 
 return app;

@@ -73,11 +73,29 @@ For Uganda, the practical baseline is UGX amounts, local phone formats and optio
 
 ## SMS reminders (Africa's Talking)
 - Manual: `POST /api/credit/:customerId/remind`.
-- Automatic: set `REMINDERS_ENABLED=true`. Once a day, customers whose oldest debt is over 7 days old get one SMS, at most once per 7 days, for active subscriptions only. Every attempt is logged in `reminder_log`. An advisory lock stops multiple instances from double-sending.
+- Automatic on Render: set `REMINDERS_ENABLED=true`. Once a day, customers whose oldest debt is over 7 days old get one SMS, at most once per 7 days, for active subscriptions only. Every attempt is logged in `reminder_log`. An advisory lock stops multiple instances from double-sending.
+- Automatic on Vercel: set `REMINDERS_ENABLED=true` and a strong `CRON_SECRET`, then add this to `vercel.json` to schedule `/internal/cron/reminders` daily at 06:00 UTC:
+  ```json
+  "crons": [{ "path": "/internal/cron/reminders", "schedule": "0 6 * * *" }]
+  ```
+  The endpoint requires `Authorization: Bearer <CRON_SECRET>`.
 - Use `AT_USERNAME=sandbox` while testing.
 
 ## Tests and CI
 `npm test` runs unit tests, plus integration tests when `DATABASE_URL_TEST` points at an empty Postgres database. GitHub Actions (`.github/workflows/ci.yml`) runs both and builds the frontend.
+
+## Production hosting (Vercel)
+
+The repository includes a Vercel configuration that builds the React frontend as static output and runs Fastify as a Node.js Function. PostgreSQL must be hosted separately; Vercel does not provision the database for this project.
+
+1. Push this project to a Git provider connected to Vercel and import it with the repository root as the project root. Vercel uses `vercel.json` and `npm run vercel-build`; the frontend and API are served from the same origin.
+2. Create a managed PostgreSQL database that supports serverless connections and configure its pooled `DATABASE_URL` in the Vercel project. Also set `JWT_SECRET` to a long random secret and `TRUST_PROXY_HOPS=1`.
+3. Apply the schema once to that database by running `npm run migrate` from a trusted machine with the production `DATABASE_URL` configured. Migrations are deliberately not run automatically during Vercel builds.
+4. Set `APP_URL` to the deployment's public HTTPS origin for Flutterwave checkout redirects. Add optional `FLW_SECRET_KEY` and `FLW_WEBHOOK_HASH` for billing, `AT_USERNAME` and `AT_API_KEY` for SMS, and `AI_API_KEY` plus `AI_MODEL` for external AI suggestions. Configure the Flutterwave webhook at `https://YOUR-DOMAIN/webhooks/flutterwave`.
+5. Keep `REMINDERS_ENABLED` false unless SMS reminders are intended. To enable daily reminders, also configure `CRON_SECRET` and add the Vercel Cron described above. Vercel cron availability and schedule limits depend on the selected plan.
+6. After deployment, check `/health` returns `{"ok":true}`, then test registration/login, inventory writes, image uploads, Flutterwave callbacks (if enabled), and billing redirects before accepting real business data.
+
+Do not put database credentials or provider secrets in source control. Vercel Functions use a one-connection PostgreSQL pool per instance; use the connection-pooling URL recommended by your database provider and review its connection limits, backups, and recovery options.
 
 ## Production hosting (Render)
 
